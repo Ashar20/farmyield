@@ -1,0 +1,113 @@
+{ 
+  "columns": 25,
+  "image": "Tileset Grass Spring.png",
+  "imageheight": 432,
+  "imagewidth": 400,
+  "margin": 0,
+  "name": "Tileset Grass Spring",
+  "spacing": 0,
+  "tilecount": 675,
+  "tileheight": 16,
+  "tiles": [
+    {
+      "animation": [
+        {
+          "duration": 150,
+          "tileid": 150
+        }, 
+        {
+          "duration": 150,
+          "tileid": 152
+        }, 
+        {
+          "duration": 150,
+          "tileid": 154
+        }, 
+        {
+          "duration": 150,
+          "tileid": 156
+        }
+      ],
+      "id": 150
+    }, 
+    {
+      "animation": [
+        {
+          "duration": 150,
+          "tileid": 175
+        }, 
+        {
+          "duration": 150,
+          "tileid": 177
+        }, 
+        {
+          "duration": 150,
+          "tileid": 179
+        }, 
+        {
+          "duration": 150,
+          "tileid": 181
+        }
+      ],
+      "id": 175
+    }, 
+    {
+      "animation": [
+        {
+          "duration": 150,
+          "tileid": 176
+        }, 
+        {
+          "duration": 150,
+          "tileid": 178
+        }, 
+        {
+          "duration": 150,
+          "tileid": 180
+        }, 
+        {
+          "duration": 150,
+          "tileid": 182
+        }
+      ],
+      "id": 176
+    }, 
+    {
+      "animation": [
+        {
+          "duration": 150,
+          "tileid": 204
+        }, 
+        {
+          "duration": 150,
+          "tileid": 207
+        }, 
+        {
+          "duration": 150,
+          "tileid": 210
+        }
+      ],
+      "id": 204
+    }, 
+    {
+      "animation": [
+        {
+          "duration": 150,
+          "tileid": 227
+        }, 
+        {
+          "duration": 150,
+          "tileid": 230
+        }, 
+        {
+          "duration": 150,
+          "tileid": 233
+        }
+      ],
+      "id": 227
+    }
+  ],
+  "tilewidth": 16,
+  "type": "tileset",
+  "version": "1.10"
+} 

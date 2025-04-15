@@ -1,0 +1,146 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>Tiled Map with Animated Tiles</title>
+  <style>
+    body {
+      font-family: Arial, sans-serif;
+      max-width: 1200px;
+      margin: 0 auto;
+      padding: 20px;
+      background-color: #f5f5f5;
+    }
+    
+    h1 {
+      text-align: center;
+      color: #333;
+    }
+    
+    .canvas-container {
+      display: flex;
+      justify-content: center;
+      margin: 20px 0;
+    }
+    
+    canvas {
+      background-color: #fff;
+      box-shadow: 0 2px 10px rgba(0, 0, 0, 0.1);
+    }
+    
+    .controls {
+      display: flex;
+      justify-content: center;
+      gap: 10px;
+      margin-bottom: 20px;
+    }
+    
+    button {
+      padding: 8px 16px;
+      background-color: #4CAF50;
+      color: white;
+      border: none;
+      border-radius: 4px;
+      cursor: pointer;
+    }
+    
+    button:hover {
+      background-color: #45a049;
+    }
+    
+    .info {
+      background-color: #e9f7ef;
+      border-left: 5px solid #4CAF50;
+      padding: 15px;
+      margin: 20px 0;
+      border-radius: 4px;
+    }
+  </style>
+</head>
+<body>
+  <h1>Tiled Map with Animated Tiles</h1>
+  
+  <div class="info">
+    <p>This demo loads a Tiled map JSON file and renders it with animated tiles using HTML Canvas 2D.</p>
+    <p>The animation is implemented using requestAnimationFrame and tracks the time between frames to ensure smooth animations.</p>
+  </div>
+  
+  <div class="controls">
+    <button id="loadMapBtn">Load Map</button>
+    <button id="toggleAnimationBtn">Pause Animation</button>
+  </div>
+  
+  <div class="canvas-container">
+    <canvas id="mapCanvas" width="800" height="600"></canvas>
+  </div>
+  
+  <script type="module">
+    import TiledMapDemo from '../src/TiledMapDemo.js';
+    
+    // Wait for the DOM to be fully loaded
+    document.addEventListener('DOMContentLoaded', () => {
+      // Initialize the demo
+      const demo = new TiledMapDemo('mapCanvas');
+      let animationRunning = false;
+      
+      // Set up button event handlers
+      const loadMapBtn = document.getElementById('loadMapBtn');
+      const toggleAnimationBtn = document.getElementById('toggleAnimationBtn');
+      
+      loadMapBtn.addEventListener('click', async () => {
+        // Use the correct path to the map file
+        const mapPath = '/maps/land-map.json';
+        
+        // Disable the button while loading
+        loadMapBtn.disabled = true;
+        loadMapBtn.textContent = 'Loading...';
+        
+        try {
+          // Initialize the demo with the map
+          const success = await demo.init(mapPath);
+          
+          if (success) {
+            loadMapBtn.textContent = 'Map Loaded';
+            animationRunning = true;
+          } else {
+            loadMapBtn.textContent = 'Load Failed';
+            setTimeout(() => {
+              loadMapBtn.textContent = 'Try Again';
+              loadMapBtn.disabled = false;
+            }, 2000);
+          }
+        } catch (error) {
+          console.error('Error loading map:', error);
+          loadMapBtn.textContent = 'Error';
+          setTimeout(() => {
+            loadMapBtn.textContent = 'Try Again';
+            loadMapBtn.disabled = false;
+          }, 2000);
+        }
+      });
+      
+      toggleAnimationBtn.addEventListener('click', () => {
+        if (!demo.renderer || !demo.renderer.loaded) return;
+        
+        if (animationRunning) {
+          demo.renderer.stopAnimationLoop();
+          toggleAnimationBtn.textContent = 'Resume Animation';
+        } else {
+          demo.renderer.startAnimationLoop();
+          toggleAnimationBtn.textContent = 'Pause Animation';
+        }
+        
+        animationRunning = !animationRunning;
+      });
+      
+      // Clean up on page unload
+      window.addEventListener('beforeunload', () => {
+        if (demo) {
+          demo.destroy();
+        }
+      });
+    });
+  </script>
+</body>
+</html> 
