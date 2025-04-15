@@ -1,11 +1,10 @@
-import { useEffect, useRef, useState } from 'react';
+import { useEffect, useRef, useState, useCallback } from 'react';
 
 const TileCanvas = () => {
   const canvasRef = useRef(null);
   const [mapData, setMapData] = useState(null);
   const [waterTileset, setWaterTileset] = useState(null);
   const [landTileset, setLandTileset] = useState(null);
-  const [tilesetData, setTilesetData] = useState({ water: null, land: null });
   const [animationFrames, setAnimationFrames] = useState({});
   const [currentFrameTime, setCurrentFrameTime] = useState({});
   const [waterAnimFrame, setWaterAnimFrame] = useState(0);
@@ -53,11 +52,6 @@ const TileCanvas = () => {
         // Load land tileset data
         const landTilesetResponse = await fetch(landTilesetPath);
         const landTilesetData = await landTilesetResponse.json();
-
-        setTilesetData({
-          water: waterTilesetData,
-          land: landTilesetData,
-        });
 
         // Process animation data
         const animations = {};
@@ -187,7 +181,7 @@ const TileCanvas = () => {
   }, [mapData, waterTileset, landTileset, animationFrames, currentFrameTime]);
 
   // Draw a single tile
-  const drawTile = (ctx, tileset, tileId, x, y, isWaterLayer) => {
+  const drawTile = useCallback((ctx, tileset, tileId, x, y, isWaterLayer) => {
     if (tileId === 0) return; // Skip empty tiles
 
     let sourceX, sourceY;
@@ -235,10 +229,10 @@ const TileCanvas = () => {
       TILE_SIZE,
       TILE_SIZE
     );
-  };
+  }, [waterAnimFrame, animationFrames, TILE_SIZE, LAND_TILES_PER_ROW]);
   
   // Draw the water bubble overlay
-  const drawWaterBubble = (ctx) => {
+  const drawWaterBubble = useCallback((ctx) => {
     if (!waterTileset) return;
     
     // Draw a rapidly animating bubble at position (3, 3)
@@ -253,7 +247,7 @@ const TileCanvas = () => {
       TILE_SIZE,                 // Destination width
       TILE_SIZE                  // Destination height
     );
-  };
+  }, [bubbleAnimFrame, waterTileset, BUBBLE_POSITION, TILE_SIZE]);
 
   // Render map
   useEffect(() => {
@@ -281,7 +275,7 @@ const TileCanvas = () => {
     // Draw the water bubble overlay after all map layers
     drawWaterBubble(ctx);
     
-  }, [mapData, waterTileset, landTileset, animationFrames, currentFrameTime, waterAnimFrame, bubbleAnimFrame]);
+  }, [mapData, waterTileset, landTileset, animationFrames, currentFrameTime, waterAnimFrame, bubbleAnimFrame, drawTile, drawWaterBubble]);
 
   if (!mapData || !waterTileset || !landTileset) return <div>Loading...</div>;
 
