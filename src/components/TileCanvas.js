@@ -1,4 +1,4 @@
-import { useEffect, useRef, useState, useCallback } from 'react';
+import { useEffect, useRef, useState, useCallback, useMemo } from 'react';
 
 const TileCanvas = () => {
   const canvasRef = useRef(null);
@@ -20,8 +20,8 @@ const TileCanvas = () => {
   const WATER_FRAME_DURATION = 800; // Slow down the water animation to 800ms per frame
   const BUBBLE_FRAME_DURATION = 150; // Bubble animation is faster at 150ms per frame
   
-  // Bubble position in tile coordinates
-  const BUBBLE_POSITION = { x: 3, y: 3 };
+  // Bubble position in tile coordinates - wrapped in useMemo
+  const BUBBLE_POSITION = useMemo(() => ({ x: 3, y: 3 }), []);
 
   // Load map data and tilesets
   useEffect(() => {
