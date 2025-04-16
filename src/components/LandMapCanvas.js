@@ -38,6 +38,196 @@ const LandMapCanvas = () => {
     'up': 3
   };
 
+  // Check if a position is valid for movement
+  const isValidPosition = useCallback((position) => {
+    if (!mapData) return false;
+    
+    // Check map boundaries
+    if (position.x < 0 || position.x >= mapData.width || 
+        position.y < 0 || position.y >= mapData.height) {
+      console.log("Position out of bounds:", position);
+      return false;
+    }
+    
+    // Get the tile index for this position
+    const tileIndex = position.y * mapData.width + position.x;
+    
+    // Find the land layer
+    const landLayer = mapData.layers.find(layer => 
+      layer.name && layer.name.toLowerCase().includes('land') && layer.visible);
+    
+    // Find water layers or non-walkable layers
+    const waterLayer = mapData.layers.find(layer => 
+      layer.name && layer.name.toLowerCase().includes('water') && layer.visible);
+    
+    // Find building or obstacle layers
+    const buildingLayer = mapData.layers.find(layer => 
+      layer.name && (layer.name.toLowerCase().includes('farm') || 
+       layer.name.toLowerCase().includes('hous') || 
+       layer.name.toLowerCase().includes('obstacle')) && layer.visible);
+    
+    // Check water layer - don't allow walking on water
+    if (waterLayer && waterLayer.data[tileIndex] !== 0) {
+      // Exception: tile ID 62 is walkable grass
+      const tileId = waterLayer.data[tileIndex];
+      if (tileId !== 62) {
+        console.log("Water detected at position:", position, "Tile ID:", tileId);
+        return false;
+      }
+    }
+    
+    // Check if there's a blocking object like buildings
+    if (buildingLayer && buildingLayer.data[tileIndex] !== 0) {
+      console.log("Building detected at position:", position);
+      return false;
+    }
+    
+    // If land layer exists, check if position has a valid land tile (ID 62 is walkable grass)
+    if (landLayer) {
+      const tileId = landLayer.data[tileIndex];
+      // Allow walking on grass (tile ID 62) or empty tiles (for layers with partial coverage)
+      if (tileId !== 0 && tileId !== 62) {
+        // Special case for edges and transitions that are actually walkable
+        const walkableTileIds = [62]; // Add other walkable IDs as needed
+        if (!walkableTileIds.includes(tileId)) {
+          console.log("Non-walkable land at position:", position, "Tile ID:", tileId);
+          return false;
+        }
+      }
+    }
+    
+    // If no problems found, position is valid
+    return true;
+  }, [mapData]); // Dependency: mapData
+
+  // Draw the map - Define this BEFORE any useEffect that depends on it
+  const drawMap = useCallback(() => {
+    if (!mapData || !canvasRef.current || !tileset) return;
+
+    const canvas = canvasRef.current;
+    const ctx = canvas.getContext('2d');
+    canvas.width = VIEWPORT_WIDTH;
+    canvas.height = VIEWPORT_HEIGHT;
+    ctx.clearRect(0, 0, canvas.width, canvas.height);
+
+    const mapWidth = mapData.width;
+    const mapHeight = mapData.height;
+    const firstGid = mapData.tilesets[0].firstgid || 1;
+
+    const startTileX = Math.floor(viewportOffset.x / TILE_SIZE);
+    const startTileY = Math.floor(viewportOffset.y / TILE_SIZE);
+    const endTileX = Math.min(startTileX + Math.ceil(VIEWPORT_WIDTH / TILE_SIZE) + 1, mapWidth);
+    const endTileY = Math.min(startTileY + Math.ceil(VIEWPORT_HEIGHT / TILE_SIZE) + 1, mapHeight);
+
+    mapData.layers.forEach(layer => {
+      if (layer.type === 'tilelayer' && layer.visible) {
+        const data = layer.data;
+        for (let y = startTileY; y < endTileY; y++) {
+          for (let x = startTileX; x < endTileX; x++) {
+            const tileIndex = y * mapWidth + x;
+            const tileId = data[tileIndex];
+            if (tileId === 0) continue;
+            let sourceX, sourceY;
+            if (animationFrames[tileId] && currentFrames[tileId] !== undefined) {
+              const animation = animationFrames[tileId];
+              const currentFrameIndex = animation.currentFrame;
+              const frameTileId = animation.frames[currentFrameIndex].tileid;
+              sourceX = (frameTileId % TILES_PER_ROW) * TILE_SIZE;
+              sourceY = Math.floor(frameTileId / TILES_PER_ROW) * TILE_SIZE;
+            } else {
+              const localTileId = tileId - firstGid;
+              sourceX = (localTileId % TILES_PER_ROW) * TILE_SIZE;
+              sourceY = Math.floor(localTileId / TILES_PER_ROW) * TILE_SIZE;
+            }
+            const screenX = (x * TILE_SIZE) - viewportOffset.x;
+            const screenY = (y * TILE_SIZE) - viewportOffset.y;
+            if (screenX > -TILE_SIZE && screenX < VIEWPORT_WIDTH && screenY > -TILE_SIZE && screenY < VIEWPORT_HEIGHT) {
+              ctx.drawImage(tileset, sourceX, sourceY, TILE_SIZE, TILE_SIZE, screenX, screenY, TILE_SIZE, TILE_SIZE);
+            }
+          }
+        }
+      }
+    });
+
+    if (characterIdleSprite && characterWalkSprite) {
+      const sprite = isWalking ? characterWalkSprite : characterIdleSprite;
+      let sourceX, sourceY;
+      if (isWalking) {
+        sourceX = (characterFrame % 6) * CHARACTER_WIDTH;
+        sourceY = DIRECTION_ROWS[characterDirection] * CHARACTER_HEIGHT;
+      } else {
+        sourceX = (characterFrame % 4) * CHARACTER_WIDTH;
+        sourceY = 0;
+      }
+      const characterScreenX = (characterPosition.x * TILE_SIZE) - viewportOffset.x - (CHARACTER_WIDTH - TILE_SIZE) / 2;
+      const characterScreenY = (characterPosition.y * TILE_SIZE) - viewportOffset.y - (CHARACTER_HEIGHT - TILE_SIZE);
+      ctx.drawImage(sprite, sourceX, sourceY, CHARACTER_WIDTH, CHARACTER_HEIGHT, characterScreenX, characterScreenY, CHARACTER_WIDTH, CHARACTER_HEIGHT);
+
+      // Only check window.location on client-side
+      if (typeof window !== 'undefined' && window.location.hostname === 'localhost') {
+        ctx.fillStyle = 'rgba(0, 0, 0, 0.7)';
+        ctx.fillRect(10, 10, 300, 90);
+        ctx.fillStyle = 'white';
+        ctx.font = '12px monospace';
+        ctx.fillText(`Position: (${characterPosition.x}, ${characterPosition.y})`, 20, 30);
+        ctx.fillText(`Direction: ${characterDirection}`, 20, 50);
+        ctx.fillText(`Viewport: (${viewportOffset.x}, ${viewportOffset.y})`, 20, 70);
+        ctx.fillText(`Keys: ${Object.keys(keyPressedRef.current).filter(k => keyPressedRef.current[k]).join(', ')}`, 20, 90);
+      }
+    }
+  }, [mapData, tileset, viewportOffset, animationFrames, currentFrames, characterIdleSprite, characterWalkSprite, isWalking, characterFrame, characterDirection, characterPosition, DIRECTION_ROWS]); // Added DIRECTION_ROWS dependency
+
+  // Handle continuous movement when keys are held down
+  const handleContinuousMovement = useCallback(() => {
+    if (!mapData) return false;
+    
+    let newPosition = { ...characterPosition };
+    let moving = false;
+    let direction = characterDirection;
+
+    // Directly check key states
+    if (keyPressedRef.current.ArrowUp || keyPressedRef.current.w) {
+      newPosition = { x: characterPosition.x, y: Math.max(0, characterPosition.y - 1) };
+      direction = 'up';
+      moving = true;
+    } 
+    else if (keyPressedRef.current.ArrowDown || keyPressedRef.current.s) {
+      newPosition = { x: characterPosition.x, y: Math.min(mapData.height - 1, characterPosition.y + 1) };
+      direction = 'down';
+      moving = true;
+    } 
+    else if (keyPressedRef.current.ArrowLeft || keyPressedRef.current.a) {
+      newPosition = { x: Math.max(0, characterPosition.x - 1), y: characterPosition.y };
+      direction = 'left';
+      moving = true;
+    } 
+    else if (keyPressedRef.current.ArrowRight || keyPressedRef.current.d) {
+      newPosition = { x: Math.min(mapData.width - 1, characterPosition.x + 1), y: characterPosition.y };
+      direction = 'right';
+      moving = true;
+    }
+
+    if (moving) {
+      if (!isWalking) setIsWalking(true);
+      if (direction !== characterDirection) setCharacterDirection(direction);
+      
+      const tileIndex = newPosition.y * mapData.width + newPosition.x;
+      const landLayer = mapData.layers.find(layer => layer.name?.toLowerCase().includes('land') && layer.visible);
+      let forceAllow = false;
+      if (landLayer && landLayer.data[tileIndex] === 62) forceAllow = true;
+      
+      if (forceAllow || isValidPosition(newPosition)) {
+        setCharacterPosition(newPosition);
+      } else {
+        console.log("Invalid move attempted to:", newPosition);
+      }
+      return true;
+    } else if (isWalking) {
+      setIsWalking(false);
+    }
+    return false;
+  }, [mapData, characterPosition, characterDirection, isWalking, isValidPosition]);
+  
   // Load map data and tilesets
   useEffect(() => {
     const loadMapAndTilesets = async () => {
@@ -139,9 +329,9 @@ const LandMapCanvas = () => {
 
     // Update the viewport offset
     setViewportOffset({ x: offsetX, y: offsetY });
-  }, [characterPosition, mapData]);
+  }, [characterPosition, mapData, TILE_SIZE, VIEWPORT_WIDTH, VIEWPORT_HEIGHT]);
 
-  // Animation loop
+  // Animation loop - Now using drawMap and handleContinuousMovement that are defined earlier
   useEffect(() => {
     if (!mapData || !tileset || !characterIdleSprite || !characterWalkSprite) return;
 
@@ -205,197 +395,7 @@ const LandMapCanvas = () => {
         cancelAnimationFrame(animationFrameRef.current);
       }
     };
-  }, [mapData, tileset, characterIdleSprite, characterWalkSprite, animationFrames, currentFrames, characterFrame, characterDirection, isWalking, characterPosition, viewportOffset, drawMap, handleContinuousMovement]);
-
-  // Check if a position is valid for movement
-  const isValidPosition = useCallback((position) => {
-    if (!mapData) return false;
-    
-    // Check map boundaries
-    if (position.x < 0 || position.x >= mapData.width || 
-        position.y < 0 || position.y >= mapData.height) {
-      console.log("Position out of bounds:", position);
-      return false;
-    }
-    
-    // Get the tile index for this position
-    const tileIndex = position.y * mapData.width + position.x;
-    
-    // Find the land layer
-    const landLayer = mapData.layers.find(layer => 
-      layer.name && layer.name.toLowerCase().includes('land') && layer.visible);
-    
-    // Find water layers or non-walkable layers
-    const waterLayer = mapData.layers.find(layer => 
-      layer.name && layer.name.toLowerCase().includes('water') && layer.visible);
-    
-    // Find building or obstacle layers
-    const buildingLayer = mapData.layers.find(layer => 
-      layer.name && (layer.name.toLowerCase().includes('farm') || 
-       layer.name.toLowerCase().includes('hous') || 
-       layer.name.toLowerCase().includes('obstacle')) && layer.visible);
-    
-    // Check water layer - don't allow walking on water
-    if (waterLayer && waterLayer.data[tileIndex] !== 0) {
-      // Exception: tile ID 62 is walkable grass
-      const tileId = waterLayer.data[tileIndex];
-      if (tileId !== 62) {
-        console.log("Water detected at position:", position, "Tile ID:", tileId);
-        return false;
-      }
-    }
-    
-    // Check if there's a blocking object like buildings
-    if (buildingLayer && buildingLayer.data[tileIndex] !== 0) {
-      console.log("Building detected at position:", position);
-      return false;
-    }
-    
-    // If land layer exists, check if position has a valid land tile (ID 62 is walkable grass)
-    if (landLayer) {
-      const tileId = landLayer.data[tileIndex];
-      // Allow walking on grass (tile ID 62) or empty tiles (for layers with partial coverage)
-      if (tileId !== 0 && tileId !== 62) {
-        // Special case for edges and transitions that are actually walkable
-        const walkableTileIds = [62]; // Add other walkable IDs as needed
-        if (!walkableTileIds.includes(tileId)) {
-          console.log("Non-walkable land at position:", position, "Tile ID:", tileId);
-          return false;
-        }
-      }
-    }
-    
-    // If no problems found, position is valid
-    return true;
-  }, [mapData]); // Dependency: mapData
-
-  // Handle continuous movement when keys are held down
-  const handleContinuousMovement = useCallback(() => {
-    if (!mapData) return false;
-    
-    let newPosition = { ...characterPosition };
-    let moving = false;
-    let direction = characterDirection;
-
-    // Directly check key states
-    if (keyPressedRef.current.ArrowUp || keyPressedRef.current.w) {
-      newPosition = { x: characterPosition.x, y: Math.max(0, characterPosition.y - 1) };
-      direction = 'up';
-      moving = true;
-    } 
-    else if (keyPressedRef.current.ArrowDown || keyPressedRef.current.s) {
-      newPosition = { x: characterPosition.x, y: Math.min(mapData.height - 1, characterPosition.y + 1) };
-      direction = 'down';
-      moving = true;
-    } 
-    else if (keyPressedRef.current.ArrowLeft || keyPressedRef.current.a) {
-      newPosition = { x: Math.max(0, characterPosition.x - 1), y: characterPosition.y };
-      direction = 'left';
-      moving = true;
-    } 
-    else if (keyPressedRef.current.ArrowRight || keyPressedRef.current.d) {
-      newPosition = { x: Math.min(mapData.width - 1, characterPosition.x + 1), y: characterPosition.y };
-      direction = 'right';
-      moving = true;
-    }
-
-    if (moving) {
-      if (!isWalking) setIsWalking(true);
-      if (direction !== characterDirection) setCharacterDirection(direction);
-      
-      const tileIndex = newPosition.y * mapData.width + newPosition.x;
-      const landLayer = mapData.layers.find(layer => layer.name?.toLowerCase().includes('land') && layer.visible);
-      let forceAllow = false;
-      if (landLayer && landLayer.data[tileIndex] === 62) forceAllow = true;
-      
-      if (forceAllow || isValidPosition(newPosition)) {
-        setCharacterPosition(newPosition);
-      } else {
-        console.log("Invalid move attempted to:", newPosition);
-      }
-      return true;
-    } else if (isWalking) {
-      setIsWalking(false);
-    }
-    return false;
-  }, [mapData, characterPosition, characterDirection, isWalking, isValidPosition]); // Dependencies
-
-  // Draw the map
-  const drawMap = useCallback(() => {
-    if (!mapData || !canvasRef.current || !tileset) return;
-
-    const canvas = canvasRef.current;
-    const ctx = canvas.getContext('2d');
-    canvas.width = VIEWPORT_WIDTH;
-    canvas.height = VIEWPORT_HEIGHT;
-    ctx.clearRect(0, 0, canvas.width, canvas.height);
-
-    const mapWidth = mapData.width;
-    const mapHeight = mapData.height;
-    const firstGid = mapData.tilesets[0].firstgid || 1;
-
-    const startTileX = Math.floor(viewportOffset.x / TILE_SIZE);
-    const startTileY = Math.floor(viewportOffset.y / TILE_SIZE);
-    const endTileX = Math.min(startTileX + Math.ceil(VIEWPORT_WIDTH / TILE_SIZE) + 1, mapWidth);
-    const endTileY = Math.min(startTileY + Math.ceil(VIEWPORT_HEIGHT / TILE_SIZE) + 1, mapHeight);
-
-    mapData.layers.forEach(layer => {
-      if (layer.type === 'tilelayer' && layer.visible) {
-        const data = layer.data;
-        for (let y = startTileY; y < endTileY; y++) {
-          for (let x = startTileX; x < endTileX; x++) {
-            const tileIndex = y * mapWidth + x;
-            const tileId = data[tileIndex];
-            if (tileId === 0) continue;
-            let sourceX, sourceY;
-            if (animationFrames[tileId] && currentFrames[tileId] !== undefined) {
-              const animation = animationFrames[tileId];
-              const currentFrameIndex = animation.currentFrame;
-              const frameTileId = animation.frames[currentFrameIndex].tileid;
-              sourceX = (frameTileId % TILES_PER_ROW) * TILE_SIZE;
-              sourceY = Math.floor(frameTileId / TILES_PER_ROW) * TILE_SIZE;
-            } else {
-              const localTileId = tileId - firstGid;
-              sourceX = (localTileId % TILES_PER_ROW) * TILE_SIZE;
-              sourceY = Math.floor(localTileId / TILES_PER_ROW) * TILE_SIZE;
-            }
-            const screenX = (x * TILE_SIZE) - viewportOffset.x;
-            const screenY = (y * TILE_SIZE) - viewportOffset.y;
-            if (screenX > -TILE_SIZE && screenX < VIEWPORT_WIDTH && screenY > -TILE_SIZE && screenY < VIEWPORT_HEIGHT) {
-              ctx.drawImage(tileset, sourceX, sourceY, TILE_SIZE, TILE_SIZE, screenX, screenY, TILE_SIZE, TILE_SIZE);
-            }
-          }
-        }
-      }
-    });
-
-    if (characterIdleSprite && characterWalkSprite) {
-      const sprite = isWalking ? characterWalkSprite : characterIdleSprite;
-      let sourceX, sourceY;
-      if (isWalking) {
-        sourceX = (characterFrame % 6) * CHARACTER_WIDTH;
-        sourceY = DIRECTION_ROWS[characterDirection] * CHARACTER_HEIGHT;
-      } else {
-        sourceX = (characterFrame % 4) * CHARACTER_WIDTH;
-        sourceY = 0;
-      }
-      const characterScreenX = (characterPosition.x * TILE_SIZE) - viewportOffset.x - (CHARACTER_WIDTH - TILE_SIZE) / 2;
-      const characterScreenY = (characterPosition.y * TILE_SIZE) - viewportOffset.y - (CHARACTER_HEIGHT - TILE_SIZE);
-      ctx.drawImage(sprite, sourceX, sourceY, CHARACTER_WIDTH, CHARACTER_HEIGHT, characterScreenX, characterScreenY, CHARACTER_WIDTH, CHARACTER_HEIGHT);
-
-      // Only check window.location on client-side
-      if (typeof window !== 'undefined' && window.location.hostname === 'localhost') {
-        ctx.fillStyle = 'rgba(0, 0, 0, 0.7)';
-        ctx.fillRect(10, 10, 300, 90);
-        ctx.fillStyle = 'white';
-        ctx.font = '12px monospace';
-        ctx.fillText(`Position: (${characterPosition.x}, ${characterPosition.y})`, 20, 30);
-        ctx.fillText(`Direction: ${characterDirection}`, 20, 50);
-        ctx.fillText(`Viewport: (${viewportOffset.x}, ${viewportOffset.y})`, 20, 70);
-        ctx.fillText(`Keys: ${Object.keys(keyPressedRef.current).filter(k => keyPressedRef.current[k]).join(', ')}`, 20, 90);
-      }
-    }
-  }, [mapData, tileset, viewportOffset, animationFrames, currentFrames, characterIdleSprite, characterWalkSprite, isWalking, characterFrame, characterDirection, characterPosition]); // Dependencies
+  }, [mapData, tileset, characterIdleSprite, characterWalkSprite, animationFrames, currentFrames, characterFrame, characterDirection, isWalking, characterPosition, viewportOffset, drawMap, handleContinuousMovement, CHARACTER_FRAME_DURATION, DEFAULT_FRAME_DURATION, MOVEMENT_COOLDOWN, CHARACTER_FRAMES]);
 
   // Handle keyboard input for character movement
   useEffect(() => {
@@ -482,7 +482,7 @@ const LandMapCanvas = () => {
       window.removeEventListener('keydown', handleKeyDown);
       window.removeEventListener('keyup', handleKeyUp);
     };
-  }, [characterDirection, characterPosition, mapData, isValidPosition]); // Now depends on useCallback wrapped function
+  }, [characterDirection, characterPosition, mapData, isValidPosition]);
 
   // Render loading state or canvas
   if (!mapData || !tileset || !characterIdleSprite || !characterWalkSprite) {
