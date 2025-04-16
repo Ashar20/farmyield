@@ -1,5 +1,6 @@
 import dynamic from 'next/dynamic';
 import { Suspense } from 'react';
+import Head from 'next/head';
 
 // Dynamically import the LandMapCanvas component with SSR disabled
 const LandMapCanvas = dynamic(
@@ -9,40 +10,24 @@ const LandMapCanvas = dynamic(
 
 export default function Home() {
   return (
-    <div className="container">
-      <main>
-        <h1>Land Map Viewer</h1>
-        <div className="map-container">
-          <Suspense fallback={<div>Loading map...</div>}>
-            <LandMapCanvas />
-          </Suspense>
-        </div>
-      </main>
-      
-      <style jsx>{`
-        .container {
-          padding: 2rem;
-          display: flex;
-          flex-direction: column;
-          align-items: center;
-        }
-        main {
-          width: 100%;
-          max-width: 800px;
-        }
-        h1 {
-          margin-bottom: 1.5rem;
-          text-align: center;
-        }
-        .map-container {
-          display: flex;
-          justify-content: center;
-          overflow: auto;
-          max-width: 100%;
-          max-height: 80vh;
-          border-radius: 4px;
-        }
-      `}</style>
-    </div>
+    <>
+      <Head>
+        <title>Land Map</title>
+        <style>{`
+          body {
+            margin: 0;
+            padding: 0;
+            overflow: hidden;
+          }
+          html, body, #__next {
+            width: 100%;
+            height: 100%;
+          }
+        `}</style>
+      </Head>
+      <Suspense fallback={<div>Loading map...</div>}>
+        <LandMapCanvas />
+      </Suspense>
+    </>
   );
 } 
